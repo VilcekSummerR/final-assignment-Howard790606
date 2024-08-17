@@ -1,0 +1,204 @@
+---
+title: "Fecal Microbiota, Fecal Metabolome, and Colorectal Cancer Interrelations"
+author: "Chien-Hung Lu"
+date: "2024-08-17"
+output: slidy_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(ggplot2)
+library(tidyverse)
+library(ComplexHeatmap)
+
+# Import csv data
+demo <- read.csv("https://raw.githubusercontent.com/VilcekSummerR/final-assignment-Howard790606/main/S4Table.csv")
+
+mt <- read.csv("https://raw.githubusercontent.com/VilcekSummerR/final-assignment-Howard790606/main/S2Table.csv")
+
+mb <- read.csv("https://raw.githubusercontent.com/VilcekSummerR/final-assignment-Howard790606/main/S3Table.csv")
+
+```
+
+## Background
+
+- This dataset is from NYU Data Catalog.
+
+- This study aims to investigate the interactions between fecal microbiota and metabolites, either with colorectal adenocarcinoma (CRC) or not.
+
+- First, we want to have an overview of the dataset. We first check the demographics.
+
+- Link: https://datacatalog.med.nyu.edu/dataset/10121
+```{r demo, echo = TRUE}
+
+# Check the first 5 rows of data
+head(demo)
+
+# Subsetting the first 8 columns as demographics data
+demo <- demo[,c(1:8)]
+
+```
+
+## Data cleaning and refactor the values
+
+```{r split dataset, echo = TRUE}
+
+# Factor and relabel the numeric data
+demo$case <- factor(demo$case, labels = c('patient','control'))
+demo$sex <- factor(demo$sex, labels = c('male','female'))
+demo$race <- factor(demo$race, labels = c('white','black and others'))
+
+# Create a new column for hospital and factorize
+demo$hospital <- ifelse(demo$hosp1 == 1, "A", ifelse(demo$hosp2 == 1, "B", "C"))
+demo$hospital <- factor(demo$hospital, labels = c('Walter Reed Army Medical Center', 'George Washington University Hospital', 'National Naval Medical Center'))
+
+# Delete the hosp1 and hosp2 columns
+demo <- demo[,c(-7,-8)]
+
+# Have a summary of data
+summary(demo)
+
+```
+
+Next, we split the dataset into patient and control group.
+```{r dataset, echo = TRUE}
+# Use filter method to split data, case 0 refers to patient group, case 1 refers to control group
+demo_pat <- demo %>% filter(case == "patient")
+  
+demo_cont <-demo %>% filter(case == "control")
+```
+
+## Visulization of data
+
+- Take a look at the histogram of each continuous variable to see if ther are normally distributed.
+
+- The histograms reveal the high possibilities of normal distribution.
+```{r hist, echo = TRUE}
+par(mfrow=c(1, 2))
+hist(demo$age, col = "steelblue")
+hist(demo$bmi, col = "steelblue")
+```
+
+- Check skewness by QQPlot and QQline.
+
+Most of our data lie on the QQline, indicating that the data is normally distributed.
+```{r qqplot, echo = TRUE}
+par(mfrow=c(1,2))
+##QQPlot for age
+qqnorm(demo$age, main = "Normal Q-Q Plot Age")
+
+#QQLine adds a straight line for reference
+qqline(demo$age)
+
+##QQPlot for BMI
+qqnorm(demo$bmi,main= "Normal Q-Q Plot BMI")
+
+#QQLine adds a straight line for reference
+qqline(demo$bmi)
+```
+
+## Use Shapiro test to check if age and bmi are normally distributed
+
+- It shows that age is normally distributed. However, bmi is statistically not normally distributed (p<0.05).
+
+```{r shapiro, echo = TRUE}
+shapiro.test(demo$age)
+shapiro.test(demo$bmi)
+```
+
+## Comparing the difference between patients with CRC and control group
+
+- Compare the patient group and control group using Student T tests for continuous variables and Chi's square tests for categorical variables. 
+
+- The results show that age is statistically different between two groups.
+
+```{r significance check, echo = TRUE}
+# Compare sex difference between patient and control groups
+chisq.test(demo$sex, demo$case)
+
+# Compare sex difference between patient and control groups
+chisq.test(demo$race, demo$case)
+
+# Compare hospital difference between patient and control groups
+chisq.test(demo$hospital, demo$case)
+
+# Compare age difference between patient and control groups
+t.test(demo$age ~ demo$case)
+
+# Compare BMI difference between patient and control groups
+t.test(demo$bmi ~ demo$case)
+```
+
+## Use left_join to combine demographics, microbiota data, and metabolites data
+
+- Use ggplot2 to check the data of microbiota(since column 8) and metabolites(since column 228)
+
+```{r leftjoin, echo = TRUE}
+demo_mb  <- left_join(demo, mb, by = "ID")
+demo_mb_mt  <- left_join(demo_mb, mt, by = "ID")
+
+par(mfrow=c(1,2))
+
+pic <- ggplot(demo_mb_mt, aes(x = Root.k__Archaea, y = X_1_11_UNDECANEDICARBOXYLATE, col = as.factor(case)))
+
+pic + geom_point()
+
+pic2 <- ggplot(demo_mb_mt, aes(x = Root.k__Bacteria, y = X_1_2_PROPANEDIOL, col = as.factor(case)))
+
+pic2 + geom_point()
+```
+
+## Check the correlation between fecal microbiota-microbiota and microbiota-metabolite in CRC and control groups
+
+- Use heapmap to draw the corrlelation map.
+
+```{r heapmap, echo = TRUE}
+
+# Use filter method to split data to patient group and control group
+demo_mb_mt_pat <- demo_mb_mt %>% filter(case == "patient")
+demo_mb_mt_cont <-demo_mb_mt %>% filter(case == "control")
+
+demo_mb_mt_pat <- demo_mb_mt_pat[,c(8:757)]
+demo_mb_mt_cont <- demo_mb_mt_cont[,c(8:757)]
+
+par(mfrow=c(1,2))
+Heatmap(cor(demo_mb_mt_pat), show_column_names = FALSE, show_row_names = FALSE)
+Heatmap(cor(demo_mb_mt_cont), show_column_names = FALSE, show_row_names = FALSE)
+
+```
+
+## Use which() function to find out the most significant microbiota and metabolites pair, and see if there is group difference
+
+- Different patterns of significant correlation pairs are seen.
+
+```{r which, echo = TRUE}
+
+h1 <- cor(demo_mb_mt_pat)
+h2 <- cor(demo_mb_mt_cont)
+
+h1_which <- which(((1>h1*h1) & (h1*h1>0.9)), arr.ind=T)
+h2_which <- which(((1>h2*h2) & (h2*h2>0.9)), arr.ind=T)
+
+# Find out most significant correlation pair in patient group
+head(h1_which)
+
+# Find out most significant correlation pair in control group
+head(h2_which)
+
+```
+ 
+## Conclusion
+
+- Age data is normally distributed while bmi data is not normally distributed.
+
+- There is significant difference between patients with colorectal carcinoma (CRC) and controls in terms of age.
+
+- Fecal microbiota-microbiota and microbiota-metabolite correlation shows different pattern within the whole group and between CRC and control group.
+
+## Discussion and future direction
+
+- How to generate a multivariate regression model to see if there is significant independent microbiota-metabolite correlation coefficient is warranted.
+
+- A reliable statistical method to address multi-comparison problem is needed in further study.
+
+- Ref: Sinha R, Ahn J, Sampson JN, et al. Fecal Microbiota, Fecal Metabolome, and Colorectal Cancer Interrelations. PLoS One. 2016;11(3):e0152126. Published 2016 Mar 25. doi:10.1371/journal.pone.0152126
