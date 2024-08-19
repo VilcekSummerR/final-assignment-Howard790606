@@ -1,3 +1,5 @@
+FL Notes: A - grade. Well done, some small things: it might improve clarity to also include a cross table when running a chi square analysis to see the actual raw values. Also in your analysis you found bmi to be non-parametric but then used t test, a wilcoxon test would be more appropriate. Also, please remember to cite your work! 
+
 ---
 title: "Fecal Microbiota, Fecal Metabolome, and Colorectal Cancer Interrelations"
 author: "Chien-Hung Lu"
